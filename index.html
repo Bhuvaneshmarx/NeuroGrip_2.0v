@@ -1552,7 +1552,7 @@ try {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, powerPreference:'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.4 : 1.7));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.02;
   renderer.shadowMap.enabled = !small;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -1610,16 +1610,57 @@ try {
   }
 
   /* ---------- materials ---------- */
-  const matShell  = new THREE.MeshStandardMaterial({ color:0xe7e1d4, metalness:0.22, roughness:0.44, envMapIntensity:1.0 });
-  const matFrame  = new THREE.MeshStandardMaterial({ color:0x18212e, metalness:0.9,  roughness:0.28, envMapIntensity:1.3 });
+  /* palette: glossy white shell panels, orange dorsal plates, red actuators and a
+     dark machined mechanism showing through the gaps */
+  const matShell  = new THREE.MeshStandardMaterial({ color:0xf3f2ef, metalness:0.06, roughness:0.26, envMapIntensity:1.15 });
+  const matAccent = new THREE.MeshStandardMaterial({ color:0xf07c16, metalness:0.28, roughness:0.33, envMapIntensity:1.2 });
+  const matRed    = new THREE.MeshStandardMaterial({ color:0xb4201b, metalness:0.45, roughness:0.28, envMapIntensity:1.3 });
+  const matDark   = new THREE.MeshStandardMaterial({ color:0x15181d, metalness:0.78, roughness:0.36, envMapIntensity:1.1 });
+  const matChrome = new THREE.MeshStandardMaterial({ color:0xc9ced6, metalness:1.0,  roughness:0.16, envMapIntensity:1.5 });
+  const matFrame  = matDark;
   /* the socket shell and its bands fade out to expose the muscle layer, so they
      stay in the transparent pass permanently rather than recompiling on scroll */
-  const matSocket = new THREE.MeshStandardMaterial({ color:0x1b2533, metalness:0.86, roughness:0.3, envMapIntensity:1.25,
+  /* forearm shell: white panels with vent perforations and seam lines, drawn once
+     into a canvas rather than modelled as geometry */
+  function shellPanelTex(){
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 512;
+    const g = c.getContext('2d');
+    g.fillStyle = '#f2f1ee'; g.fillRect(0,0,1024,512);
+    // broad seam lines around the circumference
+    g.fillStyle = '#c7c6c2';
+    [52, 196, 340, 470].forEach(y=>{ g.fillRect(0,y,1024,4); });
+    g.fillStyle = '#9d9c99';
+    [54, 198, 342, 472].forEach(y=>{ g.fillRect(0,y,1024,1.5); });
+    // vertical split lines
+    g.fillStyle = '#d2d1cd';
+    [0, 256, 512, 768].forEach(x=>{ g.fillRect(x,56,3,138); });
+    // vent perforations, two blocks
+    const holes = (ox, oy, cols, rows)=>{
+      for(let r=0;r<rows;r++) for(let cN=0;cN<cols;cN++){
+        const x = ox + cN*26, y = oy + r*26;
+        g.fillStyle = '#21242a'; g.fillRect(x, y, 11, 11);
+        g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(x, y+10, 11, 2);
+      }
+    };
+    holes(150, 236, 5, 3);
+    holes(640, 236, 5, 3);
+    // faint grime in the seams so the white does not read as flat plastic
+    g.fillStyle = 'rgba(90,92,96,.16)';
+    for(let i=0;i<70;i++){
+      const x = Math.random()*1024, y = Math.random()*512, w = 18 + Math.random()*90;
+      g.fillRect(x, y, w, 1.4);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = THREE.RepeatWrapping;
+    return t;
+  }
+  const matSocket = new THREE.MeshStandardMaterial({ map:shellPanelTex(), metalness:0.1, roughness:0.3, envMapIntensity:1.1,
                                                      side:THREE.DoubleSide, transparent:true, opacity:1 });
-  const matBand   = new THREE.MeshStandardMaterial({ color:0x2b3442, metalness:0.1, roughness:0.9, transparent:true, opacity:1 });
-  const matPad    = new THREE.MeshStandardMaterial({ color:0x2b3442, metalness:0.1,  roughness:0.9 });
-  const matJoint  = new THREE.MeshStandardMaterial({ color:0x4ab6f5, emissive:0x1f7cbd, emissiveIntensity:1.7, metalness:0.5, roughness:0.35 });
-  const matTendon = new THREE.MeshStandardMaterial({ color:0xd8d2c4, metalness:0.3,  roughness:0.6 });
+  const matBand   = new THREE.MeshStandardMaterial({ color:0x24272d, metalness:0.5, roughness:0.45, transparent:true, opacity:1 });
+  const matPad    = new THREE.MeshStandardMaterial({ color:0x3a3d44, metalness:0.08, roughness:0.85 });
+  const matTendon = new THREE.MeshStandardMaterial({ color:0x5d6066, metalness:0.65, roughness:0.4 });
   const matMuscle = new THREE.MeshStandardMaterial({ color:0x93352a, emissive:0x4a0f08, emissiveIntensity:0.5, roughness:0.62, metalness:0.05, transparent:true, opacity:0 });
   const matSinew  = new THREE.MeshStandardMaterial({ color:0xd6cfc0, emissive:0x000000, roughness:0.5, metalness:0.15, transparent:true, opacity:0 });
   const matPcb    = new THREE.MeshStandardMaterial({ color:0x123528, metalness:0.35, roughness:0.55 });
@@ -1628,18 +1669,75 @@ try {
   const matBatt   = new THREE.MeshStandardMaterial({ color:0x2a2a38, metalness:0.4,  roughness:0.5 });
   const matServo  = new THREE.MeshStandardMaterial({ color:0x15181f, metalness:0.5,  roughness:0.42 });
 
-  const capsule = (r,len,mat)=>{
-    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r,len,5,14), mat);
-    m.position.y = len/2; m.castShadow = true; return m;
-  };
-  const joint = r => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(r,12,10), matJoint);
-    return m;
-  };
   const box = (w,h,d,mat)=>{
     const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
     m.castShadow = true; return m;
   };
+
+  /* Fingers curl toward -Z, so -Z is the palm side and +Z the back of the hand.
+     Each phalanx is a dark mechanism core, a white shell wrapped round it, and an
+     orange plate on the back where a real hand would show its nail bed. */
+  function phalanx(r, len, panel = true){
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(r*0.56, r*0.5, len*1.04, 10), matDark);
+    core.position.y = len/2;
+    g.add(core);
+
+    const shell = new THREE.Mesh(new THREE.CapsuleGeometry(r, len*0.84, 4, 16), matShell);
+    shell.position.set(0, len*0.52, -r*0.04);
+    shell.scale.set(1, 1, 0.94);
+    shell.castShadow = true;
+    g.add(shell);
+
+    if(panel){
+      const p = new THREE.Mesh(new THREE.CapsuleGeometry(r*0.36, len*0.6, 3, 12), matAccent);
+      p.position.set(0, len*0.54, r*0.86);
+      p.scale.set(1.05, 1, 0.3);
+      g.add(p);
+    }
+    return g;
+  }
+
+  /* hinge at every joint: a dark hub with a bright pin through it */
+  function knuckle(r){
+    const g = new THREE.Group();
+    // sits inside the shell so the joint reads as a seam, not a black bead
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(r*0.56, r*0.56, r*1.95, 14), matDark);
+    hub.rotation.z = Math.PI/2;
+    hub.castShadow = true;
+    g.add(hub);
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(r*0.2, r*0.2, r*2.15, 10), matChrome);
+    pin.rotation.z = Math.PI/2;
+    g.add(pin);
+    return g;
+  }
+
+  /* red linear actuator; the chrome rod strokes as the hand closes */
+  const actuators = [];
+  function actuator(len, r, id){
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 16), matRed);
+    body.castShadow = true;
+    g.add(body);
+    [-1,1].forEach(s=>{
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(r*1.12, r*1.12, len*0.1, 16), matDark);
+      collar.position.y = s*len*0.46;
+      g.add(collar);
+    });
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(r*0.5, r*0.5, r*0.3, 14), matDark);
+    boss.rotation.x = Math.PI/2;
+    boss.position.set(0, len*0.12, r*0.92);
+    g.add(boss);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r*0.5, r*0.07, 6, 16), matChrome);
+    ring.position.copy(boss.position);
+    g.add(ring);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(r*0.34, r*0.34, len*0.8, 12), matChrome);
+    rod.position.y = len*0.5;
+    g.add(rod);
+    actuators.push({ rod, len });
+    if(id) g.userData.id = id;
+    return g;
+  }
 
   /* ---------- rig ---------- */
   const root = new THREE.Group();          // user orbit + film rotation
@@ -1656,18 +1754,30 @@ try {
   }
 
   /* --- forearm socket shell (slides off to reveal the internals) --- */
+  /* forearm is sized off the palm: a socket wider than the hand reads as a drainpipe */
+  const SOCK_TOP = 0.56, SOCK_BOT = 0.70, SOCK_LEN = 2.5;
   const socketShell = new THREE.Group();
-  const shellBody = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 1.12, 2.7, 24, 1, true), matSocket);
+  const shellBody = new THREE.Mesh(new THREE.CylinderGeometry(SOCK_TOP, SOCK_BOT, SOCK_LEN, 26, 1, true), matSocket);
   shellBody.castShadow = true;
   socketShell.add(shellBody);
   for(let i=0;i<3;i++){
-    const band = new THREE.Mesh(new THREE.TorusGeometry(1.02 - i*0.03, 0.05, 7, 24), matBand);
-    band.rotation.x = Math.PI/2; band.position.y = 0.75 - i*0.72;
+    const rr = SOCK_TOP + (SOCK_BOT-SOCK_TOP)*(i/2) + 0.012;
+    const band = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.032, 7, 26), matBand);
+    band.rotation.x = Math.PI/2; band.position.y = 0.82 - i*0.78;
     socketShell.add(band);
   }
-  const shellCap = new THREE.Mesh(new THREE.CircleGeometry(1.12, 24), matSocket);
-  shellCap.rotation.x = Math.PI/2; shellCap.position.y = -1.35;
+  const shellCap = new THREE.Mesh(new THREE.CircleGeometry(SOCK_BOT, 26), matBand);
+  shellCap.rotation.x = Math.PI/2; shellCap.position.y = -1.25;
   socketShell.add(shellCap);
+  // red tensioner on the back of the forearm, plus its indicator boss
+  const foreAct = actuator(1.0, 0.115);
+  foreAct.position.set(0.08, 0.15, SOCK_TOP + 0.09);
+  foreAct.rotation.x = -0.1;
+  socketShell.add(foreAct);
+  const foreBoss = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.07, 18), matRed);
+  foreBoss.rotation.x = Math.PI/2;
+  foreBoss.position.set(-0.22, -0.85, SOCK_BOT - 0.03);
+  socketShell.add(foreBoss);
   socketShell.position.y = -2.9;
   hand.add(socketShell);
   mover(socketShell, [0.95,-0.15,0.1], 2.9, 'chassis');
@@ -1679,40 +1789,40 @@ try {
     // CH1 sits on the palm side over the flexor, CH2 on the back over the extensor
     const out = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
     const y = 0.12 - i*0.1;
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.08,14),
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.06,14),
       new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.9, roughness:0.4, metalness:0.2 }));
     pad.quaternion.setFromUnitVectors(UP, out);     // disc faces outward
-    pad.position.copy(out).multiplyScalar(0.99).setY(y);
-    const g = glow(col, 0.9, 0.5);
-    g.position.copy(out).multiplyScalar(1.1).setY(y);
+    pad.position.copy(out).multiplyScalar(SOCK_TOP + 0.04).setY(y);
+    const g = glow(col, 0.62, 0.5);
+    g.position.copy(out).multiplyScalar(SOCK_TOP + 0.14).setY(y);
     socketShell.add(pad, g);
     pads.push({ pad, g, ch:i });
   });
 
   /* --- muscles inside the forearm --- */
   const muscles = [];
-  [[1, 0.46, 0x9b3a2c],[ -1, 0.44, 0x8a3326]].forEach(([side, rad, col], i)=>{
+  [[1, 0.29, 0x9b3a2c],[ -1, 0.27, 0x8a3326]].forEach(([side, rad, col], i)=>{
     const m = new THREE.Mesh(new THREE.SphereGeometry(1,14,12), matMuscle.clone());
     m.material.color.setHex(col);
-    m.scale.set(rad, 1.05, rad*0.78);
-    m.position.set(0, -2.85, side*0.42);
+    m.scale.set(rad, 0.95, rad*0.8);
+    m.position.set(0, -2.85, side*0.24);
     hand.add(m);
     // tapered tendon from the muscle belly up toward the wrist
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.09,1.25,7), matSinew.clone());
-    t.position.set(0, -1.62, side*0.3);
-    t.rotation.x = side*0.12;
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.065,1.15,7), matSinew.clone());
+    t.position.set(0, -1.75, side*0.17);
+    t.rotation.x = side*0.1;
     hand.add(t);
-    muscles.push({ body:m, tendon:t, baseScale:new THREE.Vector3(rad,1.05,rad*0.78), ch:i });
+    muscles.push({ body:m, tendon:t, baseScale:new THREE.Vector3(rad,0.95,rad*0.8), ch:i });
   });
 
   /* --- internals: servo bank --- */
   const servoBank = new THREE.Group();
   for(let i=0;i<6;i++){
     const col = i%2, row = Math.floor(i/2);
-    const s = box(0.4, 0.3, 0.36, matServo);
-    s.position.set((col-0.5)*0.46, row*0.42 - 0.44, 0);
-    const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.06,10), matCan);
-    horn.position.set(s.position.x, s.position.y + 0.18, s.position.z + 0.1);
+    const s = box(0.28, 0.23, 0.26, matServo);
+    s.position.set((col-0.5)*0.32, row*0.32 - 0.34, 0);
+    const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.05,10), matCan);
+    horn.position.set(s.position.x, s.position.y + 0.14, s.position.z + 0.08);
     servoBank.add(s, horn);
   }
   servoBank.position.set(0, -2.75, -0.08);
@@ -1721,21 +1831,21 @@ try {
 
   /* --- internals: main board with the ESP32 module --- */
   const pcb = new THREE.Group();
-  const board = box(1.25, 0.055, 0.78, matPcb);
-  const esp = box(0.52, 0.085, 0.33, matChip);
-  esp.position.set(-0.26, 0.07, 0);
-  const shield = box(0.34, 0.095, 0.26, matCan);
-  shield.position.set(-0.26, 0.085, 0);
-  const hdr = box(0.5, 0.05, 0.08, matChip);
-  hdr.position.set(0.32, 0.055, -0.3);
+  const board = box(0.88, 0.045, 0.5, matPcb);
+  const esp = box(0.38, 0.07, 0.22, matChip);
+  esp.position.set(-0.18, 0.056, 0);
+  const shield = box(0.25, 0.08, 0.17, matCan);
+  shield.position.set(-0.18, 0.07, 0);
+  const hdr = box(0.34, 0.04, 0.06, matChip);
+  hdr.position.set(0.22, 0.045, -0.19);
   pcb.add(board, esp, shield, hdr);
-  [[0.3,0.2],[0.42,0.2],[0.3,-0.05]].forEach(([x,z],i)=>{
+  [[0.21,0.13],[0.29,0.13],[0.21,-0.03]].forEach(([x,z],i)=>{
     const col = i ? 0x4fd39a : 0x4ab6f5;
-    const led = new THREE.Mesh(new THREE.SphereGeometry(0.03,8,6),
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.022,8,6),
       new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:2.2 }));
-    led.position.set(x, 0.065, z);
-    const lg = glow(col, 0.26, 0.8);
-    lg.position.set(x, 0.065, z);
+    led.position.set(x, 0.052, z);
+    const lg = glow(col, 0.2, 0.8);
+    lg.position.set(x, 0.052, z);
     pcb.add(led, lg);
   });
   pcb.position.set(0, -2.1, 0.12);
@@ -1744,50 +1854,73 @@ try {
 
   /* --- internals: EMG front-end board --- */
   const afe = new THREE.Group();
-  const afeBoard = box(0.8, 0.05, 0.52, matPcb);
+  const afeBoard = box(0.58, 0.04, 0.36, matPcb);
   afe.add(afeBoard);
-  [-0.18, 0.18].forEach(x=>{
-    const ic = box(0.17, 0.06, 0.15, matChip);
-    ic.position.set(x, 0.055, 0.05);
+  [-0.13, 0.13].forEach(x=>{
+    const ic = box(0.12, 0.05, 0.11, matChip);
+    ic.position.set(x, 0.045, 0.04);
     afe.add(ic);
   });
-  afe.position.set(0, -3.35, 0.16);
+  afe.position.set(0, -3.35, 0.1);
   hand.add(afe);
   mover(afe, [0.35,-0.75,0.85], 2.3, 'afe');
 
   /* --- internals: battery --- */
   const batt = new THREE.Group();
-  batt.add(box(0.95, 0.4, 0.56, matBatt));
-  const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.3,6), matCan);
-  lead.rotation.z = Math.PI/2; lead.position.set(0.55, 0.08, 0.12);
+  batt.add(box(0.66, 0.3, 0.4, matBatt));
+  const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.024,0.024,0.22,6), matCan);
+  lead.rotation.z = Math.PI/2; lead.position.set(0.4, 0.06, 0.09);
   batt.add(lead);
-  batt.position.set(0, -3.5, -0.3);
+  batt.position.set(0, -3.5, -0.2);
   hand.add(batt);
   mover(batt, [-0.2,-0.95,-0.7], 2.6, 'batt');
 
   /* --- wrist + palm --- */
-  const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.78, 0.5, 20), matFrame);
-  wrist.position.y = -1.45; wrist.castShadow = true;
+  const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.56, 0.46, 20), matDark);
+  wrist.position.y = -1.42; wrist.castShadow = true;
   hand.add(wrist);
-  const wj = joint(0.3); wj.position.set(0,-1.2,0); hand.add(wj);
+  const wristRing = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.038, 8, 24), matChrome);
+  wristRing.rotation.x = Math.PI/2; wristRing.position.y = -1.22;
+  hand.add(wristRing);
+  const wj = knuckle(0.24); wj.position.set(0,-1.2,0); hand.add(wj);
 
-  const palmFrame = new THREE.Mesh(new THREE.CapsuleGeometry(0.82, 0.72, 5, 18), matFrame);
-  palmFrame.scale.set(1.18, 1, 0.44);
-  palmFrame.position.y = -0.52; palmFrame.castShadow = true;
-  hand.add(palmFrame);
+  /* palm: one moulded shell, with a dark split line running round its rim the way
+     a two-part injection moulding meets */
+  const palmShell = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 0.26, 6, 22), matShell);
+  palmShell.scale.set(1.42, 1, 0.46);
+  palmShell.position.y = -0.52;
+  palmShell.castShadow = true;
+  hand.add(palmShell);
+  const palmSeam = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 0.26, 6, 22), matDark);
+  palmSeam.scale.set(1.45, 1.02, 0.2);
+  palmSeam.position.y = -0.52;
+  hand.add(palmSeam);
+  const palmFrame = palmShell;
 
-  const palmPlate = new THREE.Mesh(new THREE.CapsuleGeometry(0.70, 0.62, 5, 16), matShell);
-  palmPlate.scale.set(1.12, 1, 0.17);
-  palmPlate.position.set(0, -0.52, 0.3);
-  palmPlate.castShadow = true;
+  // raised white cover on the back of the hand, with the orange strip
+  const palmPlate = new THREE.Group();
+  const cover = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 0.22, 5, 18), matShell);
+  cover.scale.set(1.34, 1, 0.24);
+  cover.castShadow = true;
+  palmPlate.add(cover);
+  const strip = box(0.17, 0.66, 0.05, matAccent);
+  strip.position.set(0, 0, 0.075);
+  palmPlate.add(strip);
+  palmPlate.position.set(0, -0.5, 0.17);
   hand.add(palmPlate);
   mover(palmPlate, [0,0.1,1], 1.7);
+
+  // the main grip actuator, tucked over the wrist on the back of the hand
+  const palmAct = actuator(0.6, 0.095);
+  palmAct.position.set(-0.3, -1.0, 0.26);
+  palmAct.rotation.x = -0.1;
+  hand.add(palmAct);
 
   /* --- tendon bundle through the palm --- */
   const tendons = new THREE.Group();
   for(let i=0;i<5;i++){
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.026,1.9,6), matTendon);
-    t.position.set(-0.58 + i*0.29, -0.75, 0.1);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.022,1.5,6), matTendon);
+    t.position.set(-0.48 + i*0.24, -0.72, 0.06);
     t.rotation.x = -0.05;
     tendons.add(t);
   }
@@ -1796,10 +1929,10 @@ try {
 
   /* --- fingers --- */
   const FINGERS = [
-    { x:-0.62, y:0.22, len:[0.74,0.52,0.36], r:[0.155,0.14,0.125], spread:-0.10 },
-    { x:-0.21, y:0.30, len:[0.82,0.58,0.38], r:[0.160,0.145,0.128], spread:-0.03 },
-    { x: 0.20, y:0.26, len:[0.76,0.54,0.36], r:[0.155,0.14,0.124], spread: 0.03 },
-    { x: 0.58, y:0.14, len:[0.62,0.44,0.32], r:[0.142,0.128,0.114], spread: 0.11 }
+    { x:-0.49, y:0.08, len:[0.70,0.49,0.34], r:[0.135,0.122,0.108], spread:-0.085 },
+    { x:-0.165,y:0.14, len:[0.78,0.55,0.36], r:[0.140,0.126,0.111], spread:-0.025 },
+    { x: 0.165,y:0.11, len:[0.72,0.51,0.34], r:[0.135,0.122,0.107], spread: 0.025 },
+    { x: 0.48, y:0.02, len:[0.59,0.42,0.30], r:[0.123,0.111,0.098], spread: 0.095 }
   ];
   const fingerRig = [];
   FINGERS.forEach((cfg,i)=>{
@@ -1808,43 +1941,59 @@ try {
     g1.rotation.z = cfg.spread;
     hand.add(g1);
     mover(g1, [cfg.x*0.45, 1, 0.12], 1.5 + i*0.22, i===0 ? 'fsr' : null);
-    g1.add(joint(cfg.r[0]*1.18), capsule(cfg.r[0], cfg.len[0], matShell));
+    g1.add(knuckle(cfg.r[0]*1.1), phalanx(cfg.r[0], cfg.len[0]));
+    // white cap over the big knuckle, the way the moulded shell would cover it
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(cfg.r[0]*1.16, 12, 10), matShell);
+    cap.scale.set(1, 0.74, 0.86);
+    cap.position.set(0, cfg.r[0]*0.1, -cfg.r[0]*0.2);
+    g1.add(cap);
 
     const g2 = new THREE.Group(); g2.position.y = cfg.len[0]; g1.add(g2);
-    g2.add(joint(cfg.r[1]*1.2), capsule(cfg.r[1], cfg.len[1], matShell));
+    g2.add(knuckle(cfg.r[1]*1.08), phalanx(cfg.r[1], cfg.len[1]));
 
     const g3 = new THREE.Group(); g3.position.y = cfg.len[1]; g2.add(g3);
-    g3.add(joint(cfg.r[2]*1.22), capsule(cfg.r[2], cfg.len[2], matShell));
+    g3.add(knuckle(cfg.r[2]*1.06), phalanx(cfg.r[2], cfg.len[2]));
 
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(cfg.r[2]*1.03, 12, 10), matPad);
-    tip.position.y = cfg.len[2]; tip.scale.set(1,0.8,1.08);
+    // fingertip: rubber contact pad with the FSR behind it
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(cfg.r[2]*0.88, 12, 10), matPad);
+    tip.position.set(0, cfg.len[2]*0.96, -cfg.r[2]*0.18);
+    tip.scale.set(1, 0.8, 1.0);
     g3.add(tip);
+    const nail = new THREE.Mesh(new THREE.CapsuleGeometry(cfg.r[2]*0.4, cfg.len[2]*0.32, 3, 10), matAccent);
+    nail.scale.set(1.3, 1, 0.45);
+    nail.position.set(0, cfg.len[2]*0.86, cfg.r[2]*0.7);
+    g3.add(nail);
     fingerRig.push({ g1, g2, g3, cur:0, tip });
   });
 
   /* --- thumb --- */
   const thumbBase = new THREE.Group();
-  thumbBase.position.set(-0.92, -0.72, 0.16);
-  thumbBase.rotation.z = 0.92;
+  thumbBase.position.set(-0.54, -0.80, -0.04);
+  thumbBase.rotation.z = 1.14;
+  thumbBase.rotation.x = -0.34;
   hand.add(thumbBase);
   mover(thumbBase, [-1, 0.15, 0.45], 1.9);
-  thumbBase.add(joint(0.2), capsule(0.175, 0.56, matFrame));
-  const tg1 = new THREE.Group(); tg1.position.y = 0.56; thumbBase.add(tg1);
-  tg1.add(joint(0.17), capsule(0.158, 0.52, matShell));
-  const tg2 = new THREE.Group(); tg2.position.y = 0.52; tg1.add(tg2);
-  tg2.add(joint(0.15), capsule(0.142, 0.40, matShell));
-  const tTip = new THREE.Mesh(new THREE.SphereGeometry(0.146,12,10), matPad);
-  tTip.position.y = 0.40; tTip.scale.set(1,0.82,1.08);
+  thumbBase.add(knuckle(0.2), phalanx(0.165, 0.44, false));
+  const tg1 = new THREE.Group(); tg1.position.y = 0.44; thumbBase.add(tg1);
+  tg1.add(knuckle(0.165), phalanx(0.148, 0.42));
+  const tg2 = new THREE.Group(); tg2.position.y = 0.42; tg1.add(tg2);
+  tg2.add(knuckle(0.145), phalanx(0.132, 0.32));
+  const tTip = new THREE.Mesh(new THREE.SphereGeometry(0.136,12,10), matPad);
+  tTip.position.y = 0.32; tTip.scale.set(1,0.84,1.06);
   tg2.add(tTip);
+  const tNail = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.11, 3, 10), matAccent);
+  tNail.scale.set(1.3, 1, 0.45);
+  tNail.position.set(0, 0.27, 0.085);
+  tg2.add(tNail);
 
   /* ---------- signal packet travelling up the arm ---------- */
   const path = new THREE.CatmullRomCurve3([
-    new THREE.Vector3( 0.42,-2.80, 0.95),
-    new THREE.Vector3( 0.26,-2.10, 0.62),
-    new THREE.Vector3( 0.08,-1.40, 0.30),
-    new THREE.Vector3( 0.00,-0.60, 0.22),
-    new THREE.Vector3(-0.20, 0.34, 0.12),
-    new THREE.Vector3(-0.21, 1.20, 0.30)
+    new THREE.Vector3( 0.30,-2.80, 0.58),
+    new THREE.Vector3( 0.20,-2.10, 0.42),
+    new THREE.Vector3( 0.06,-1.40, 0.26),
+    new THREE.Vector3( 0.00,-0.60, 0.20),
+    new THREE.Vector3(-0.17, 0.30, 0.14),
+    new THREE.Vector3(-0.17, 1.35, 0.24)
   ]);
   const packet = glow(0x7fd4ff, 0.62, 0.95);
   hand.add(packet);
@@ -1874,7 +2023,7 @@ try {
 
   /* ---------- lights ---------- */
   scene.add(new THREE.HemisphereLight(0x8fb6d8, 0x070b12, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 2.4);
+  const key = new THREE.DirectionalLight(0xffffff, 2.0);
   key.position.set(5, 8, 6);
   if(!small){
     key.castShadow = true;
@@ -1891,14 +2040,17 @@ try {
   const warm = new THREE.PointLight(0xff6a4a, 26, 16); warm.position.set(1.8,-3.4,3.2); scene.add(warm);
 
   /* ---------- camera film ---------- */
+  /* pan is a screen-space shift: positive puts the arm on the right of the frame,
+     which is where it belongs when the copy column is on the left, and vice versa */
   const KF = [
-    { r: 9.4, th: 0.40, ph: 0.10, t:[0,-0.50,0] },   // 0 assembled
-    { r: 6.2, th: 0.14, ph: 0.05, t:[0, 0.30,0] },   // 1 hand close
-    { r: 5.8, th: 1.05, ph:-0.14, t:[0,-2.45,0] },   // 2 forearm
-    { r: 8.0, th:-0.90, ph: 0.14, t:[0,-1.10,0] },   // 3 signal path
-    { r:12.0, th: 0.62, ph: 0.24, t:[0,-0.60,0] },   // 4 exploded
-    { r:12.6, th: 0.34, ph: 0.09, t:[0,-0.60,0] }    // 5 reference
+    { r:13.6, th: 0.40, ph: 0.10, t:[0,-1.05,0], pan: 0.21 },  // 0 assembled
+    { r: 8.6, th: 0.16, ph: 0.06, t:[0, 0.05,0], pan: 0.23 },  // 1 hand close
+    { r: 8.0, th: 1.05, ph:-0.12, t:[0,-2.55,0], pan:-0.22 },  // 2 forearm
+    { r:10.8, th:-0.90, ph: 0.14, t:[0,-1.30,0], pan:-0.20 },  // 3 signal path
+    { r:15.8, th: 0.62, ph: 0.22, t:[0,-1.00,0], pan:-0.17 },  // 4 exploded
+    { r:16.4, th: 0.34, ph: 0.09, t:[0,-1.00,0], pan: 0.00 }   // 5 reference
   ];
+  const RIGHT = new THREE.Vector3();
   let dTh = 0, dPh = 0, dragging = false, lastX = 0, lastY = 0, idle = 0, spin = 0;
   const camT = new THREE.Vector3(0,-0.5,0);
 
@@ -1972,9 +2124,13 @@ try {
     oCur += (pose.o - oCur)*k;
     tg1.rotation.x = -1.05*tCur;
     tg2.rotation.x = -0.90*tCur;
-    thumbBase.rotation.z = 0.92 - 0.52*oCur;
-    thumbBase.rotation.y = 0.75*oCur;
-    thumbBase.rotation.x = -0.35*oCur;
+    thumbBase.rotation.z = 1.14 - 0.5*oCur;
+    thumbBase.rotation.y = 0.72*oCur;
+    thumbBase.rotation.x = -0.34 - 0.3*oCur;
+
+    /* the red actuators stroke in as the hand closes */
+    const closure = (fingerRig[0].cur + fingerRig[1].cur + fingerRig[2].cur + fingerRig[3].cur)/4;
+    for(const a of actuators) a.rod.position.y = a.len*(0.5 - closure*0.3);
 
     /* --- explode, with the intro assembling the arm on load --- */
     const ex = Math.max(NG.explode, (1-introE)*0.62);
@@ -2056,6 +2212,12 @@ try {
       camT.z + r*Math.cos(ph)*Math.cos(th)
     );
     camera.lookAt(camT);
+    // slide the camera sideways, keeping its aim, so the arm clears the copy
+    const pan = (aspect > 1.15 ? lerp(a.pan, b.pan, p) : 0) * r;
+    if(pan !== 0){
+      RIGHT.set(1,0,0).applyQuaternion(camera.quaternion);
+      camera.position.addScaledVector(RIGHT, -pan);
+    }
     if(!reduced) hand.position.y = Math.sin(clock*0.00075)*0.05;
 
     renderer.render(scene, camera);
